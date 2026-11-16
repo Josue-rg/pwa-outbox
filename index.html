@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="PWA con patron Outbox: envios que fallan sin red se guardan en IndexedDB y se sincronizan al volver la conexion.">
+  <title>Outbox PWA | IndexedDB + Background Sync</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="cabecera">
+    <div class="cabecera__texto">
+      <h1>Outbox PWA</h1>
+      <p class="cabecera__subtitulo">
+        Envios encolados en IndexedDB y sincronizados por el Service Worker.
+      </p>
+    </div>
+    <div class="cabecera__estado">
+      <span id="estado-red" class="pildora pildora--red">Comprobando red...</span>
+      <span id="contador-pendientes" class="pildora pildora--contador">0 pendientes</span>
+    </div>
+  </header>
+
+  <main class="contenido">
+    <section class="tarjeta" aria-labelledby="titulo-formulario">
+      <h2 id="titulo-formulario">Nuevo mensaje</h2>
+      <p class="tarjeta__ayuda">
+        Si el envio falla (sin red o servidor caido) el mensaje se guarda como
+        <code>pendiente</code> y se reintenta despues.
+      </p>
+
+      <form id="form-mensaje" class="formulario" novalidate>
+        <label class="campo">
+          <span class="campo__etiqueta">Titulo</span>
+          <input
+            id="entrada-titulo"
+            name="titulo"
+            type="text"
+            maxlength="80"
+            placeholder="Ej. Reporte de ventas"
+            autocomplete="off"
+            required>
+        </label>
+
+        <label class="campo">
+          <span class="campo__etiqueta">Mensaje</span>
+          <textarea
+            id="entrada-mensaje"
+            name="mensaje"
+            rows="4"
+            maxlength="500"
+            placeholder="Escribe aqui el contenido que se enviara al servidor..."
+            required></textarea>
+        </label>
+
+        <label class="interruptor">
+          <input id="simular-fallo" type="checkbox">
+          <span>Simular servidor caido (para la demostracion)</span>
+        </label>
+
+        <div class="acciones">
+          <button id="boton-enviar" class="boton boton--primario" type="submit">
+            Enviar
+          </button>
+          <button id="boton-sincronizar" class="boton" type="button">
+            Sincronizar ahora
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="tarjeta" aria-labelledby="titulo-cola">
+      <div class="tarjeta__cabecera">
+        <h2 id="titulo-cola">Cola Outbox</h2>
+        <button id="boton-purgar" class="boton boton--peligro" type="button">
+          Purgar sincronizados
+        </button>
+      </div>
+
+      <ul id="lista-outbox" class="cola">
+        <li class="cola__vacia">Todavia no hay mensajes en la cola.</li>
+      </ul>
+    </section>
+
+    <section class="tarjeta tarjeta--consola" aria-labelledby="titulo-consola">
+      <h2 id="titulo-consola">Registro de actividad</h2>
+      <pre id="registro" class="consola">Esperando eventos...</pre>
+    </section>
+  </main>
+
+  <footer class="pie">
+    <p>Practica 5.1 - 5.3 &middot; JavaScript vanilla, sin librerias.</p>
+  </footer>
+</body>
+</html>
