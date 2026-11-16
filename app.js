@@ -107,6 +107,143 @@
       });
   }
 
+  /** Fecha legible a partir del timestamp guardado en IndexedDB. */
+  function formatearFecha(marcaTiempo) {
+    if (!marcaTiempo) {
+      return 'sin fecha';
+    }
+
+    return new Date(marcaTiempo).toLocaleString('es-MX', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  }
+
+  /** Pildora con el estado del registro. */
+  function crearEtiqueta(estado) {
+    var etiqueta = document.createElement('span');
+
+    etiqueta.className = 'etiqueta';
+    etiqueta.textContent = estado;
+
+    if (estado === DBHelper.ESTADOS.SINCRONIZADO) {
+      etiqueta.classList.add('etiqueta--sincronizado');
+    } else if (estado === DBHelper.ESTADOS.ERROR) {
+      etiqueta.classList.add('etiqueta--error');
+    }
+
+    return etiqueta;
+  }
+
+  /**
+   * Construye el <li> de un registro.
+   * Se usa textContent (nunca innerHTML) para que el contenido escrito por el
+   * usuario no pueda inyectar HTML.
+   */
+  function crearItem(registro) {
+    var item = document.createElement('li');
+    var fila = document.createElement('div');
+    var grupo = document.createElement('div');
+    var titulo = document.createElement('span');
+    var meta = document.createElement('span');
+    var cuerpo = document.createElement('p');
+
+    item.className = 'cola__item';
+
+    if (registro.estado === DBHelper.ESTADOS.SINCRONIZADO) {
+      item.classList.add('cola__item--sincronizado');
+    } else if (registro.estado === DBHelper.ESTADOS.ERROR) {
+      item.classList.add('cola__item--error');
+    }
+
+    fila.className = 'cola__fila';
+    grupo.className = 'cola__grupo';
+
+    titulo.className = 'cola__titulo';
+    titulo.textContent = registro.titulo || '(sin titulo)';
+
+    meta.className = 'cola__meta';
+    meta.textContent = 'id ' + registro.id + ' | ' + formatearFecha(registro.creadoEn);
+
+    grupo.appendChild(titulo);
+    grupo.appendChild(crearEtiqueta(registro.estado));
+    fila.appendChild(grupo);
+    fila.appendChild(meta);
+
+    cuerpo.className = 'cola__cuerpo';
+    cuerpo.textContent = registro.mensaje || '';
+
+    item.appendChild(fila);
+    item.appendChild(cuerpo);
+
+    if (registro.ultimoError) {
+      var nota = document.createElement('span');
+
+      nota.className = 'cola__meta';
+      nota.textContent = 'Ultimo error: ' + registro.ultimoError +
+        (registro.intentos ? ' | intentos: ' + registro.intentos : '');
+      item.appendChild(nota);
+    }
+
+    return item;
+  }
+
+  /** Vuelve a dibujar la cola completa, del mas reciente al mas viejo. */
+  function renderizarCola() {
+    return DBHelper.listarTodos()
+      .then(function (registros) {
+        registros.sort(function (a, b) {
+          return (b.creadoEn || 0) - (a.creadoEn || 0);
+        });
+
+        elementos.lista.textContent = '';
+
+        if (!registros.length) {
+          var vacio = document.createElement('li');
+
+          vacio.className = 'cola__vacia';
+          vacio.textContent = 'Todavia no hay mensajes en la cola.';
+          elementos.lista.appendChild(vacio);
+          return registros;
+        }
+
+        registros.forEach(function (registro) {
+          elementos.lista.appendChild(crearItem(registro));
+        });
+
+        return registros;
+      })
+      .catch(function (error) {
+        registrar('No se pudo dibujar la cola: ' + error.message);
+        return [];
+      });
+  }
+
+  /** Borra de IndexedDB los registros ya sincronizados. */
+  function purgarSincronizados() {
+    elementos.botonPurgar.disabled = true;
+
+    return DBHelper.eliminarPorEstado(DBHelper.ESTADOS.SINCRONIZADO)
+      .then(function (total) {
+        registrar(total
+          ? 'Purgados ' + total + ' registros sincronizados.'
+          : 'No habia registros sincronizados que purgar.');
+
+        return Promise.all([renderizarCola(), actualizarContador()]);
+      })
+      .catch(function (error) {
+        registrar('No se pudo purgar: ' + error.message);
+      })
+      .then(function () {
+        elementos.botonPurgar.disabled = false;
+      });
+  }
+
   function limpiarFormulario() {
     elementos.titulo.value = '';
     elementos.mensaje.value = '';
@@ -139,7 +276,7 @@
         registrar('El envio fallo: ' + error.message);
         return encolar(datos, error.message).then(function () {
           limpiarFormulario();
-          return actualizarContador();
+          return Promise.all([renderizarCola(), actualizarContador()]);
         });
       })
       .then(function () {
@@ -158,11 +295,12 @@
     window.addEventListener('offline', actualizarEstadoRed);
 
     elementos.formulario.addEventListener('submit', manejarEnvio);
+    elementos.botonPurgar.addEventListener('click', purgarSincronizados);
 
     DBHelper.abrir()
       .then(function () {
         registrar('IndexedDB lista (' + DBHelper.NOMBRE_BD + ' v1).');
-        return actualizarContador();
+        return Promise.all([renderizarCola(), actualizarContador()]);
       })
       .catch(function (error) {
         registrar('No se pudo abrir IndexedDB: ' + error.message);

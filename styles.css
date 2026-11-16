@@ -299,6 +299,13 @@ code {
   justify-content: space-between;
 }
 
+.cola__grupo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .cola__titulo {
   font-weight: 700;
 }
