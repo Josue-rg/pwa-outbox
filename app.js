@@ -288,6 +288,24 @@
       });
   }
 
+  /** Registra el Service Worker que vive en sw.js. */
+  function registrarServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+      registrar('Este navegador no soporta Service Workers.');
+      return Promise.resolve(null);
+    }
+
+    return navigator.serviceWorker.register('./sw.js')
+      .then(function (registro) {
+        registrar('Service Worker registrado (ambito: ' + registro.scope + ').');
+        return registro;
+      })
+      .catch(function (error) {
+        registrar('No se pudo registrar el Service Worker: ' + error.message);
+        return null;
+      });
+  }
+
   /** Arranque de la aplicacion. */
   function iniciar() {
     actualizarEstadoRed();
@@ -305,6 +323,8 @@
       .catch(function (error) {
         registrar('No se pudo abrir IndexedDB: ' + error.message);
       });
+
+    registrarServiceWorker();
   }
 
   document.addEventListener('DOMContentLoaded', iniciar);
