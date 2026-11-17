@@ -188,13 +188,32 @@ function sincronizarOutbox() {
     });
 }
 
+/**
+ * Avisa a todas las pestanas abiertas el resultado de una sincronizacion.
+ * Asi la interfaz se actualiza sola, sin recargar.
+ */
+function avisarClientes(resultado) {
+  return self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+    .then(function (clientes) {
+      clientes.forEach(function (cliente) {
+        cliente.postMessage({ tipo: 'SYNC_FIN', resultado: resultado });
+      });
+
+      return resultado;
+    });
+}
+
+function sincronizarYAvisar() {
+  return sincronizarOutbox().then(avisarClientes);
+}
+
 // El navegador dispara este evento cuando detecta que hay conexion.
 self.addEventListener('sync', function (evento) {
   if (evento.tag !== ETIQUETA_SYNC) {
     return;
   }
 
-  evento.waitUntil(sincronizarOutbox());
+  evento.waitUntil(sincronizarYAvisar());
 });
 
 // Permite forzar la sincronizacion desde la pagina (respaldo para navegadores
@@ -206,5 +225,5 @@ self.addEventListener('message', function (evento) {
     return;
   }
 
-  evento.waitUntil(sincronizarOutbox());
+  evento.waitUntil(sincronizarYAvisar());
 });

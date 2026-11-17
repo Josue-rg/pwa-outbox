@@ -10,6 +10,8 @@
 
   var API_URL = 'https://jsonplaceholder.typicode.com/posts';
   var MAX_LINEAS_REGISTRO = 40;
+  var ETIQUETA_SYNC = 'outbox-sync';
+  var soportaBackgroundSync = 'serviceWorker' in navigator && 'SyncManager' in window;
 
   var elementos = {
     formulario: document.getElementById('form-mensaje'),
@@ -306,14 +308,180 @@
       });
   }
 
+  /** Manda la peticion de sincronizar al Service Worker por postMessage. */
+  function avisarServiceWorker() {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ tipo: 'SINCRONIZAR_AHORA' });
+      return true;
+    }
+
+    return false;
+  }
+
+  /** Respaldo final: sincroniza desde la propia pagina (sin Service Worker). */
+  function sincronizarEnPagina() {
+    registrar('Sincronizando desde la pagina...');
+
+    return DBHelper.listarPorEstado(DBHelper.ESTADOS.PENDIENTE)
+      .then(function (pendientes) {
+        if (!pendientes.length) {
+          registrar('No hay pendientes por sincronizar.');
+          return { total: 0, enviados: 0, fallidos: 0 };
+        }
+
+        var tareas = pendientes.map(function (registro) {
+          var intentos = (registro.intentos || 0) + 1;
+
+          return enviarAlServidor({ titulo: registro.titulo, mensaje: registro.mensaje })
+            .then(function () {
+              return DBHelper.actualizar(registro.id, {
+                estado: DBHelper.ESTADOS.SINCRONIZADO,
+                sincronizadoEn: Date.now(),
+                intentos: intentos,
+                ultimoError: null
+              }).then(function () {
+                return true;
+              });
+            })
+            .catch(function (error) {
+              return DBHelper.actualizar(registro.id, {
+                intentos: intentos,
+                ultimoError: error.message
+              }).then(function () {
+                return false;
+              });
+            });
+        });
+
+        return Promise.all(tareas).then(function (marcas) {
+          var enviados = marcas.filter(function (marca) {
+            return marca;
+          }).length;
+
+          registrar('Sincronizacion desde la pagina: ' + enviados + ' de ' +
+            pendientes.length + ' enviados.');
+
+          return Promise.all([renderizarCola(), actualizarContador()])
+            .then(function () {
+              return {
+                total: pendientes.length,
+                enviados: enviados,
+                fallidos: pendientes.length - enviados
+              };
+            });
+        });
+      })
+      .catch(function (error) {
+        registrar('Fallo la sincronizacion desde la pagina: ' + error.message);
+        return { total: 0, enviados: 0, fallidos: 0, error: error.message };
+      });
+  }
+
+  /**
+   * Elige el mejor mecanismo disponible:
+   * 1. Background Sync si el navegador tiene SyncManager.
+   * 2. postMessage al Service Worker si no lo tiene (Safari/iOS).
+   * 3. Sincronizacion directa en la pagina si no hay Service Worker.
+   */
+  function pedirSincronizacion() {
+    if (!('serviceWorker' in navigator)) {
+      registrar('Sin soporte de Service Worker: se usa el respaldo en la pagina.');
+      return sincronizarEnPagina();
+    }
+
+    return navigator.serviceWorker.ready
+      .then(function (registro) {
+        if (!soportaBackgroundSync) {
+          registrar('Sin SyncManager (Safari/iOS): se pide por postMessage.');
+          return avisarServiceWorker() ? 'mensaje' : sincronizarEnPagina();
+        }
+
+        return registro.sync.register(ETIQUETA_SYNC)
+          .then(function () {
+            registrar('Sincronizacion en segundo plano registrada.');
+            return 'registrada';
+          })
+          .catch(function (error) {
+            registrar('Background Sync no disponible (' + error.message +
+              '): se pide por postMessage.');
+            return avisarServiceWorker() ? 'mensaje' : sincronizarEnPagina();
+          });
+      })
+      .catch(function () {
+        return sincronizarEnPagina();
+      });
+  }
+
+  /** Recibe el resultado que manda el Service Worker con postMessage. */
+  function escucharServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+      return;
+    }
+
+    navigator.serviceWorker.addEventListener('message', function (evento) {
+      var datos = evento.data || {};
+
+      if (datos.tipo !== 'SYNC_FIN') {
+        return;
+      }
+
+      var resultado = datos.resultado || {};
+
+      if (resultado.error) {
+        registrar('El Service Worker no pudo sincronizar: ' + resultado.error);
+      } else if (!resultado.total) {
+        registrar('El Service Worker reviso la cola: no habia pendientes.');
+      } else {
+        registrar('Service Worker: ' + resultado.enviados + ' enviados, ' +
+          resultado.fallidos + ' con error.');
+      }
+
+      return Promise.all([renderizarCola(), actualizarContador()]);
+    });
+  }
+
+  function manejarSincronizar() {
+    elementos.botonSincronizar.disabled = true;
+    registrar('Sincronizacion manual solicitada.');
+
+    return pedirSincronizacion()
+      .then(function (via) {
+        if (via === 'mensaje') {
+          registrar('Peticion enviada al Service Worker.');
+        }
+        return via;
+      })
+      .catch(function (error) {
+        registrar('No se pudo sincronizar: ' + error.message);
+      })
+      .then(function () {
+        elementos.botonSincronizar.disabled = false;
+      });
+  }
+
+  /** Respaldo para navegadores sin SyncManager: al volver la red, sincroniza. */
+  function alVolverLaConexion() {
+    actualizarEstadoRed();
+    registrar('Conexion restablecida.');
+
+    if (soportaBackgroundSync) {
+      registrar('SyncManager disponible: el navegador reintenta por su cuenta.');
+      return Promise.resolve();
+    }
+
+    return pedirSincronizacion();
+  }
+
   /** Arranque de la aplicacion. */
   function iniciar() {
     actualizarEstadoRed();
-    window.addEventListener('online', actualizarEstadoRed);
+    window.addEventListener('online', alVolverLaConexion);
     window.addEventListener('offline', actualizarEstadoRed);
 
     elementos.formulario.addEventListener('submit', manejarEnvio);
     elementos.botonPurgar.addEventListener('click', purgarSincronizados);
+    elementos.botonSincronizar.addEventListener('click', manejarSincronizar);
+    escucharServiceWorker();
 
     DBHelper.abrir()
       .then(function () {

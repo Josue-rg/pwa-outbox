@@ -28,6 +28,6 @@ guardan en **IndexedDB** como `pendiente` y se sincronizan despues desde el
 - [x] Patron Outbox y purga (Tema 5.2).
 - [x] Manifest e iconos.
 - [x] Service Worker con cache del shell.
-- [ ] Background Sync con `postMessage` (Tema 5.3).
-- [ ] Respaldo con el evento `online`.
+- [x] Background Sync con `postMessage` (Tema 5.3).
+- [x] Respaldo con el evento `online`.
 - [ ] Despliegue en GitHub Pages.
