@@ -41,11 +41,3 @@ Abrir <http://localhost:8080>.
    recargar.
 3. Poner la red en offline, enviar otro mensaje y volver a conectar.
 4. "Borrar enviados" borra los que ya se enviaron.
-
-Si cambias archivos, sube el numero de `CACHE` en `sw.js` para que no se vea
-la version vieja.
-
-## Publicar
-
-Subir el repo a GitHub y activar Pages en `main` / `/ (root)`. El service worker
-necesita HTTPS (o `localhost`).
