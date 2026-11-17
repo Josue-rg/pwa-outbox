@@ -8,7 +8,7 @@
 
 importScripts('./db-helper.js');
 
-var CACHE_NOMBRE = 'outbox-shell-v1';
+var CACHE_NOMBRE = 'outbox-shell-v2';
 var ETIQUETA_SYNC = 'outbox-sync';
 var API_URL = 'https://jsonplaceholder.typicode.com/posts';
 
