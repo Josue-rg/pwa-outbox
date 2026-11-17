@@ -1,7 +1,7 @@
 {
   "name": "Outbox PWA",
   "short_name": "Outbox",
-  "description": "Practica de PWA con patron Outbox: los envios que fallan se guardan en IndexedDB y se sincronizan al volver la conexion.",
+  "description": "Manda mensajes sin internet: se guardan en la cola y salen cuando vuelve la red.",
   "lang": "es",
   "dir": "ltr",
   "start_url": "./index.html",

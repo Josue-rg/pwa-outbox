@@ -3,98 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outbox PWA</title>
   <meta name="theme-color" content="#f4f4f4">
-  <meta name="description" content="Practica de PWA con patron Outbox: los envios que fallan se guardan en IndexedDB y se sincronizan al volver la conexion.">
-  <title>Outbox PWA | IndexedDB + Background Sync</title>
-  <link rel="manifest" href="./manifest.json">
-  <link rel="icon" href="./icons/icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="description" content="Manda mensajes aunque no haya internet: se guardan y salen solos despues.">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
 </head>
 <body>
-  <header class="cabecera">
-    <div class="cabecera__texto">
-      <h1>Outbox PWA</h1>
-      <p class="cabecera__subtitulo">
-        Los envios que fallan se guardan en IndexedDB y se sincronizan despues.
-      </p>
-    </div>
-    <div class="cabecera__estado">
-      <span id="estado-red" class="pildora pildora--red">Comprobando red...</span>
-      <span id="contador-pendientes" class="pildora pildora--contador">0 pendientes</span>
+  <header>
+    <h1>Outbox PWA</h1>
+    <div class="badges">
+      <span id="badge" class="badge">Viendo la red...</span>
+      <span id="contador" class="badge badge-cola">0 en cola</span>
     </div>
   </header>
 
-  <main class="contenido">
-    <section class="tarjeta" aria-labelledby="titulo-formulario">
-      <h2 id="titulo-formulario">Nuevo mensaje</h2>
-      <p class="tarjeta__ayuda">
-        Si el envio falla (sin red o servidor caido) el mensaje se guarda como
-        <code>pendiente</code> y se reintenta despues.
-      </p>
+  <main>
+    <section class="card">
+      <h2>Nuevo mensaje</h2>
+      <p class="nota">Si no sale, se queda en la cola y se intenta otra vez.</p>
 
-      <form id="form-mensaje" class="formulario" novalidate>
-        <label class="campo">
-          <span class="campo__etiqueta">Titulo</span>
-          <input
-            id="entrada-titulo"
-            name="titulo"
-            type="text"
-            maxlength="80"
-            placeholder="Ej. Reporte de ventas"
-            autocomplete="off"
-            required>
-        </label>
+      <form id="form">
+        <input id="titulo" type="text" maxlength="80" placeholder="Titulo (ej. Nota para el profe)" autocomplete="off" required>
+        <textarea id="mensaje" rows="4" maxlength="500" placeholder="Escribe lo que quieras mandar..." required></textarea>
 
-        <label class="campo">
-          <span class="campo__etiqueta">Mensaje</span>
-          <textarea
-            id="entrada-mensaje"
-            name="mensaje"
-            rows="4"
-            maxlength="500"
-            placeholder="Escribe aqui el contenido que se enviara al servidor..."
-            required></textarea>
-        </label>
-
-        <label class="interruptor">
-          <input id="simular-fallo" type="checkbox">
-          <span>Simular servidor caido (para la demostracion)</span>
+        <label class="check">
+          <input id="fallo" type="checkbox">
+          Simular que el server fallo
         </label>
 
         <div class="acciones">
-          <button id="boton-enviar" class="boton boton--primario" type="submit">
-            Enviar
-          </button>
-          <button id="boton-sincronizar" class="boton" type="button">
-            Sincronizar ahora
-          </button>
+          <button id="btn-enviar" type="submit">Enviar</button>
+          <button id="btn-sync" type="button" class="boton-sec">Sincronizar</button>
         </div>
       </form>
     </section>
 
-    <section class="tarjeta" aria-labelledby="titulo-cola">
-      <div class="tarjeta__cabecera">
-        <h2 id="titulo-cola">Cola Outbox</h2>
-        <button id="boton-purgar" class="boton boton--peligro" type="button">
-          Purgar sincronizados
-        </button>
+    <section class="card">
+      <div class="fila">
+        <h2>La cola</h2>
+        <button id="btn-purgar" type="button" class="boton-sec">Borrar enviados</button>
       </div>
 
-      <ul id="lista-outbox" class="cola">
-        <li class="cola__vacia">Todavia no hay mensajes en la cola.</li>
+      <ul id="lista">
+        <li class="vacia">Nada por aqui.</li>
       </ul>
     </section>
 
-    <section class="tarjeta tarjeta--consola" aria-labelledby="titulo-consola">
-      <h2 id="titulo-consola">Registro</h2>
-      <pre id="registro" class="consola">Esperando eventos...</pre>
+    <section class="card">
+      <h2>Lo que pasa</h2>
+      <pre id="log">Esperando...</pre>
     </section>
   </main>
 
-  <footer class="pie">
-    <p>Practica 5.1 - 5.3 &middot; JavaScript vanilla, sin librerias.</p>
-  </footer>
+  <footer>Practica 5.1 - 5.3</footer>
 
   <script src="./db-helper.js"></script>
   <script src="./app.js"></script>

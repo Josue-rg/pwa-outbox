@@ -1,499 +1,306 @@
-/**
- * app.js
- * Logica de la interfaz (Tema 5.2): captura el envio, intenta el POST y, si
- * falla, guarda el mensaje en IndexedDB con estado 'pendiente' (patron Outbox).
- *
- * Sin async/await: todo con Promise.
- */
-(function () {
-  'use strict';
+var API = 'https://jsonplaceholder.typicode.com/posts';
+var ETIQUETA = 'outbox-sync';
+var haySyncManager = 'serviceWorker' in navigator && 'SyncManager' in window;
 
-  var API_URL = 'https://jsonplaceholder.typicode.com/posts';
-  var MAX_LINEAS_REGISTRO = 40;
-  var ETIQUETA_SYNC = 'outbox-sync';
-  var soportaBackgroundSync = 'serviceWorker' in navigator && 'SyncManager' in window;
+var form = document.getElementById('form');
+var titulo = document.getElementById('titulo');
+var mensaje = document.getElementById('mensaje');
+var fallo = document.getElementById('fallo');
+var btnEnviar = document.getElementById('btn-enviar');
+var btnSync = document.getElementById('btn-sync');
+var btnPurgar = document.getElementById('btn-purgar');
+var lista = document.getElementById('lista');
+var cajaLog = document.getElementById('log');
+var badge = document.getElementById('badge');
+var contador = document.getElementById('contador');
 
-  var elementos = {
-    formulario: document.getElementById('form-mensaje'),
-    titulo: document.getElementById('entrada-titulo'),
-    mensaje: document.getElementById('entrada-mensaje'),
-    simularFallo: document.getElementById('simular-fallo'),
-    botonEnviar: document.getElementById('boton-enviar'),
-    botonSincronizar: document.getElementById('boton-sincronizar'),
-    botonPurgar: document.getElementById('boton-purgar'),
-    lista: document.getElementById('lista-outbox'),
-    registro: document.getElementById('registro'),
-    estadoRed: document.getElementById('estado-red'),
-    contador: document.getElementById('contador-pendientes')
-  };
-
-  /** Escribe una linea con hora en el panel de registro. */
-  function registrar(texto) {
-    var hora = new Date().toLocaleTimeString('es-MX', { hour12: false });
-    var contenido = elementos.registro.textContent.trim();
-
-    if (contenido === 'Esperando eventos...') {
-      contenido = '';
-    }
-
-    var lineas = (contenido ? contenido + '\n' : '') + '[' + hora + '] ' + texto;
-
-    elementos.registro.textContent = lineas
-      .split('\n')
-      .slice(-MAX_LINEAS_REGISTRO)
-      .join('\n');
-
-    elementos.registro.scrollTop = elementos.registro.scrollHeight;
+function log(texto) {
+  if (cajaLog.textContent === 'Esperando...') {
+    cajaLog.textContent = '';
   }
 
-  /** Pinta la pildora de estado segun navigator.onLine. */
-  function actualizarEstadoRed() {
-    var enLinea = navigator.onLine;
+  var hora = new Date().toLocaleTimeString('es-MX', { hour12: false });
+  cajaLog.textContent += '[' + hora + '] ' + texto + '\n';
+  cajaLog.scrollTop = cajaLog.scrollHeight;
+}
 
-    elementos.estadoRed.textContent = enLinea ? 'En linea' : 'Sin conexion';
-    elementos.estadoRed.classList.toggle('pildora--en-linea', enLinea);
-    elementos.estadoRed.classList.toggle('pildora--sin-linea', !enLinea);
+function pintarRed() {
+  var enLinea = navigator.onLine;
+
+  badge.textContent = enLinea ? 'Con red' : 'Sin red';
+  badge.className = 'badge ' + (enLinea ? 'online' : 'offline');
+}
+
+function enviarAlServidor(datos) {
+  if (fallo.checked) {
+    return Promise.reject(new Error('simulado'));
   }
 
-  /**
-   * POST "real" al servidor de pruebas.
-   * Devuelve una Promise que se rechaza si no hay red, si el servidor responde
-   * con error o si el interruptor de fallo simulado esta activo.
-   */
-  function enviarAlServidor(datos) {
-    if (elementos.simularFallo.checked) {
-      return Promise.reject(new Error('Fallo simulado desde la interfaz'));
+  return fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ titulo: datos.titulo, mensaje: datos.mensaje })
+  }).then(function (respuesta) {
+    if (!respuesta.ok) {
+      throw new Error('el server dijo ' + respuesta.status);
     }
+    return respuesta.json();
+  });
+}
 
-    return fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-      body: JSON.stringify(datos)
-    }).then(function (respuesta) {
-      if (!respuesta.ok) {
-        throw new Error('El servidor respondio ' + respuesta.status);
-      }
-      return respuesta.json();
+function guardarPendiente(datos, motivo) {
+  return DBHelper.guardar({
+    titulo: datos.titulo,
+    mensaje: datos.mensaje,
+    estado: 'pendiente',
+    creadoEn: Date.now(),
+    ultimoError: motivo
+  }).then(function (id) {
+    log('Se guardo en la cola (id ' + id + ').');
+  });
+}
+
+function crearItem(r) {
+  var item = document.createElement('li');
+  item.className = 'item ' + r.estado;
+
+  var fila = document.createElement('div');
+  fila.className = 'fila';
+
+  var nombre = document.createElement('strong');
+  nombre.textContent = r.titulo;
+
+  var estado = document.createElement('span');
+  estado.className = 'estado';
+  estado.textContent = r.estado;
+
+  fila.appendChild(nombre);
+  fila.appendChild(estado);
+
+  var meta = document.createElement('small');
+  meta.textContent = 'id ' + r.id + ' - ' + new Date(r.creadoEn).toLocaleString('es-MX');
+
+  var cuerpo = document.createElement('p');
+  cuerpo.textContent = r.mensaje;
+
+  item.appendChild(fila);
+  item.appendChild(meta);
+  item.appendChild(cuerpo);
+
+  if (r.ultimoError) {
+    var nota = document.createElement('small');
+    nota.className = 'error';
+    nota.textContent = 'Ojo: ' + r.ultimoError;
+    item.appendChild(nota);
+  }
+
+  return item;
+}
+
+function pintarCola() {
+  return DBHelper.listarTodos().then(function (registros) {
+    registros.sort(function (a, b) {
+      return b.creadoEn - a.creadoEn;
     });
-  }
 
-  /** Guarda el mensaje en la cola como 'pendiente'. */
-  function encolar(datos, motivo) {
-    var registro = {
-      titulo: datos.titulo,
-      mensaje: datos.mensaje,
-      estado: DBHelper.ESTADOS.PENDIENTE,
-      creadoEn: Date.now(),
-      intentos: 0,
-      ultimoError: motivo
-    };
+    lista.textContent = '';
 
-    return DBHelper.guardar(registro).then(function (id) {
-      registrar('Guardado en la cola como pendiente (id ' + id + ').');
-      return id;
-    });
-  }
-
-  /** Recalcula el contador de pendientes de la cabecera. */
-  function actualizarContador() {
-    return DBHelper.contarPorEstado(DBHelper.ESTADOS.PENDIENTE)
-      .then(function (total) {
-        elementos.contador.textContent = total === 1
-          ? '1 pendiente'
-          : total + ' pendientes';
-        return total;
-      })
-      .catch(function (error) {
-        registrar('No se pudo contar pendientes: ' + error.message);
-        return 0;
-      });
-  }
-
-  /** Fecha legible a partir del timestamp guardado en IndexedDB. */
-  function formatearFecha(marcaTiempo) {
-    if (!marcaTiempo) {
-      return 'sin fecha';
-    }
-
-    return new Date(marcaTiempo).toLocaleString('es-MX', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-  }
-
-  /** Pildora con el estado del registro. */
-  function crearEtiqueta(estado) {
-    var etiqueta = document.createElement('span');
-
-    etiqueta.className = 'etiqueta';
-    etiqueta.textContent = estado;
-
-    if (estado === DBHelper.ESTADOS.SINCRONIZADO) {
-      etiqueta.classList.add('etiqueta--sincronizado');
-    } else if (estado === DBHelper.ESTADOS.ERROR) {
-      etiqueta.classList.add('etiqueta--error');
-    }
-
-    return etiqueta;
-  }
-
-  /**
-   * Construye el <li> de un registro.
-   * Se usa textContent (nunca innerHTML) para que el contenido escrito por el
-   * usuario no pueda inyectar HTML.
-   */
-  function crearItem(registro) {
-    var item = document.createElement('li');
-    var fila = document.createElement('div');
-    var grupo = document.createElement('div');
-    var titulo = document.createElement('span');
-    var meta = document.createElement('span');
-    var cuerpo = document.createElement('p');
-
-    item.className = 'cola__item';
-
-    if (registro.estado === DBHelper.ESTADOS.SINCRONIZADO) {
-      item.classList.add('cola__item--sincronizado');
-    } else if (registro.estado === DBHelper.ESTADOS.ERROR) {
-      item.classList.add('cola__item--error');
-    }
-
-    fila.className = 'cola__fila';
-    grupo.className = 'cola__grupo';
-
-    titulo.className = 'cola__titulo';
-    titulo.textContent = registro.titulo || '(sin titulo)';
-
-    meta.className = 'cola__meta';
-    meta.textContent = 'id ' + registro.id + ' | ' + formatearFecha(registro.creadoEn);
-
-    grupo.appendChild(titulo);
-    grupo.appendChild(crearEtiqueta(registro.estado));
-    fila.appendChild(grupo);
-    fila.appendChild(meta);
-
-    cuerpo.className = 'cola__cuerpo';
-    cuerpo.textContent = registro.mensaje || '';
-
-    item.appendChild(fila);
-    item.appendChild(cuerpo);
-
-    if (registro.ultimoError) {
-      var nota = document.createElement('span');
-
-      nota.className = 'cola__meta';
-      nota.textContent = 'Ultimo error: ' + registro.ultimoError +
-        (registro.intentos ? ' | intentos: ' + registro.intentos : '');
-      item.appendChild(nota);
-    }
-
-    return item;
-  }
-
-  /** Vuelve a dibujar la cola completa, del mas reciente al mas viejo. */
-  function renderizarCola() {
-    return DBHelper.listarTodos()
-      .then(function (registros) {
-        registros.sort(function (a, b) {
-          return (b.creadoEn || 0) - (a.creadoEn || 0);
-        });
-
-        elementos.lista.textContent = '';
-
-        if (!registros.length) {
-          var vacio = document.createElement('li');
-
-          vacio.className = 'cola__vacia';
-          vacio.textContent = 'Todavia no hay mensajes en la cola.';
-          elementos.lista.appendChild(vacio);
-          return registros;
-        }
-
-        registros.forEach(function (registro) {
-          elementos.lista.appendChild(crearItem(registro));
-        });
-
-        return registros;
-      })
-      .catch(function (error) {
-        registrar('No se pudo dibujar la cola: ' + error.message);
-        return [];
-      });
-  }
-
-  /** Borra de IndexedDB los registros ya sincronizados. */
-  function purgarSincronizados() {
-    elementos.botonPurgar.disabled = true;
-
-    return DBHelper.eliminarPorEstado(DBHelper.ESTADOS.SINCRONIZADO)
-      .then(function (total) {
-        registrar(total
-          ? 'Purgados ' + total + ' registros sincronizados.'
-          : 'No habia registros sincronizados que purgar.');
-
-        return Promise.all([renderizarCola(), actualizarContador()]);
-      })
-      .catch(function (error) {
-        registrar('No se pudo purgar: ' + error.message);
-      })
-      .then(function () {
-        elementos.botonPurgar.disabled = false;
-      });
-  }
-
-  function limpiarFormulario() {
-    elementos.titulo.value = '';
-    elementos.mensaje.value = '';
-    elementos.titulo.focus();
-  }
-
-  /** Flujo principal del formulario. */
-  function manejarEnvio(evento) {
-    evento.preventDefault();
-
-    var titulo = elementos.titulo.value.trim();
-    var mensaje = elementos.mensaje.value.trim();
-
-    if (!titulo || !mensaje) {
-      registrar('Titulo y mensaje son obligatorios.');
-      elementos.titulo.focus();
+    if (!registros.length) {
+      var vacio = document.createElement('li');
+      vacio.className = 'vacia';
+      vacio.textContent = 'Nada por aqui.';
+      lista.appendChild(vacio);
       return;
     }
 
-    var datos = { titulo: titulo, mensaje: mensaje };
-    elementos.botonEnviar.disabled = true;
-    registrar('Enviando "' + titulo + '" al servidor...');
+    registros.forEach(function (r) {
+      lista.appendChild(crearItem(r));
+    });
+  });
+}
 
-    enviarAlServidor(datos)
-      .then(function (respuesta) {
-        registrar('Enviado correctamente. id remoto: ' + (respuesta && respuesta.id ? respuesta.id : 'n/d'));
-        limpiarFormulario();
-      })
-      .catch(function (error) {
-        registrar('El envio fallo: ' + error.message);
-        return encolar(datos, error.message).then(function () {
-          limpiarFormulario();
-          return Promise.all([renderizarCola(), actualizarContador()]);
-        });
-      })
-      .then(function () {
-        elementos.botonEnviar.disabled = false;
-      })
-      .catch(function (error) {
-        registrar('Error inesperado: ' + error.message);
-        elementos.botonEnviar.disabled = false;
-      });
+function pintarContador() {
+  return DBHelper.contarPorEstado('pendiente').then(function (total) {
+    contador.textContent = total + ' en cola';
+  });
+}
+
+function refrescar() {
+  return Promise.all([pintarCola(), pintarContador()]).catch(function (error) {
+    log('No se pudo pintar la cola: ' + error.message);
+  });
+}
+
+function enviar(evento) {
+  evento.preventDefault();
+
+  var t = titulo.value.trim();
+  var m = mensaje.value.trim();
+
+  if (!t || !m) {
+    log('Falta el titulo o el mensaje.');
+    return;
   }
 
-  /** Registra el Service Worker que vive en sw.js. */
-  function registrarServiceWorker() {
-    if (!('serviceWorker' in navigator)) {
-      registrar('Este navegador no soporta Service Workers.');
-      return Promise.resolve(null);
-    }
+  btnEnviar.disabled = true;
+  log('Mandando "' + t + '"...');
 
-    return navigator.serviceWorker.register('./sw.js')
-      .then(function (registro) {
-        registrar('Service Worker registrado (ambito: ' + registro.scope + ').');
-        return registro;
-      })
-      .catch(function (error) {
-        registrar('No se pudo registrar el Service Worker: ' + error.message);
-        return null;
-      });
-  }
+  enviarAlServidor({ titulo: t, mensaje: m })
+    .then(function (respuesta) {
+      log('Enviado, id ' + (respuesta.id || 'n/d'));
+    })
+    .catch(function (error) {
+      log('No salio (' + error.message + '). Va a la cola.');
+      return guardarPendiente({ titulo: t, mensaje: m }, error.message);
+    })
+    .then(function () {
+      form.reset();
+      btnEnviar.disabled = false;
+      return refrescar();
+    })
+    .catch(function (error) {
+      log('Algo fallo: ' + error.message);
+      btnEnviar.disabled = false;
+    });
+}
 
-  /** Manda la peticion de sincronizar al Service Worker por postMessage. */
-  function avisarServiceWorker() {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ tipo: 'SINCRONIZAR_AHORA' });
-      return true;
-    }
+function sincronizarAqui() {
+  log('Sincronizando aqui...');
 
-    return false;
-  }
-
-  /** Respaldo final: sincroniza desde la propia pagina (sin Service Worker). */
-  function sincronizarEnPagina() {
-    registrar('Sincronizando desde la pagina...');
-
-    return DBHelper.listarPorEstado(DBHelper.ESTADOS.PENDIENTE)
-      .then(function (pendientes) {
-        if (!pendientes.length) {
-          registrar('No hay pendientes por sincronizar.');
-          return { total: 0, enviados: 0, fallidos: 0 };
-        }
-
-        var tareas = pendientes.map(function (registro) {
-          var intentos = (registro.intentos || 0) + 1;
-
-          return enviarAlServidor({ titulo: registro.titulo, mensaje: registro.mensaje })
-            .then(function () {
-              return DBHelper.actualizar(registro.id, {
-                estado: DBHelper.ESTADOS.SINCRONIZADO,
-                sincronizadoEn: Date.now(),
-                intentos: intentos,
-                ultimoError: null
-              }).then(function () {
-                return true;
-              });
-            })
-            .catch(function (error) {
-              return DBHelper.actualizar(registro.id, {
-                intentos: intentos,
-                ultimoError: error.message
-              }).then(function () {
-                return false;
-              });
-            });
-        });
-
-        return Promise.all(tareas).then(function (marcas) {
-          var enviados = marcas.filter(function (marca) {
-            return marca;
-          }).length;
-
-          registrar('Sincronizacion desde la pagina: ' + enviados + ' de ' +
-            pendientes.length + ' enviados.');
-
-          return Promise.all([renderizarCola(), actualizarContador()])
-            .then(function () {
-              return {
-                total: pendientes.length,
-                enviados: enviados,
-                fallidos: pendientes.length - enviados
-              };
-            });
-        });
-      })
-      .catch(function (error) {
-        registrar('Fallo la sincronizacion desde la pagina: ' + error.message);
-        return { total: 0, enviados: 0, fallidos: 0, error: error.message };
-      });
-  }
-
-  /**
-   * Elige el mejor mecanismo disponible:
-   * 1. Background Sync si el navegador tiene SyncManager.
-   * 2. postMessage al Service Worker si no lo tiene (Safari/iOS).
-   * 3. Sincronizacion directa en la pagina si no hay Service Worker.
-   */
-  function pedirSincronizacion() {
-    if (!('serviceWorker' in navigator)) {
-      registrar('Sin soporte de Service Worker: se usa el respaldo en la pagina.');
-      return sincronizarEnPagina();
-    }
-
-    return navigator.serviceWorker.ready
-      .then(function (registro) {
-        if (!soportaBackgroundSync) {
-          registrar('Sin SyncManager (Safari/iOS): se pide por postMessage.');
-          return avisarServiceWorker() ? 'mensaje' : sincronizarEnPagina();
-        }
-
-        return registro.sync.register(ETIQUETA_SYNC)
-          .then(function () {
-            registrar('Sincronizacion en segundo plano registrada.');
-            return 'registrada';
-          })
-          .catch(function (error) {
-            registrar('Background Sync no disponible (' + error.message +
-              '): se pide por postMessage.');
-            return avisarServiceWorker() ? 'mensaje' : sincronizarEnPagina();
-          });
-      })
-      .catch(function () {
-        return sincronizarEnPagina();
-      });
-  }
-
-  /** Recibe el resultado que manda el Service Worker con postMessage. */
-  function escucharServiceWorker() {
-    if (!('serviceWorker' in navigator)) {
-      return;
-    }
-
-    navigator.serviceWorker.addEventListener('message', function (evento) {
-      var datos = evento.data || {};
-
-      if (datos.tipo !== 'SYNC_FIN') {
+  return DBHelper.listarPorEstado('pendiente')
+    .then(function (pendientes) {
+      if (!pendientes.length) {
+        log('No hay nada pendiente.');
         return;
       }
 
-      var resultado = datos.resultado || {};
+      var tareas = pendientes.map(function (r) {
+        return enviarAlServidor(r)
+          .then(function () {
+            return DBHelper.actualizar(r.id, { estado: 'sincronizado', ultimoError: null });
+          })
+          .catch(function (error) {
+            return DBHelper.actualizar(r.id, { ultimoError: error.message });
+          });
+      });
 
-      if (resultado.error) {
-        registrar('El Service Worker no pudo sincronizar: ' + resultado.error);
-      } else if (!resultado.total) {
-        registrar('El Service Worker reviso la cola: no habia pendientes.');
-      } else {
-        registrar('Service Worker: ' + resultado.enviados + ' enviados, ' +
-          resultado.fallidos + ' con error.');
-      }
-
-      return Promise.all([renderizarCola(), actualizarContador()]);
+      return Promise.all(tareas).then(function () {
+        log('Se mandaron ' + pendientes.length + '.');
+        return refrescar();
+      });
+    })
+    .catch(function (error) {
+      log('No se pudo sincronizar: ' + error.message);
     });
+}
+
+function avisarAlSW() {
+  if (!navigator.serviceWorker.controller) {
+    return false;
   }
 
-  function manejarSincronizar() {
-    elementos.botonSincronizar.disabled = true;
-    registrar('Sincronizacion manual solicitada.');
+  navigator.serviceWorker.controller.postMessage({ tipo: 'SINCRONIZAR_AHORA' });
+  return true;
+}
 
-    return pedirSincronizacion()
-      .then(function (via) {
-        if (via === 'mensaje') {
-          registrar('Peticion enviada al Service Worker.');
+function sincronizar() {
+  btnSync.disabled = true;
+  log('Sincronizando a mano...');
+
+  var trabajo;
+
+  if (!('serviceWorker' in navigator)) {
+    trabajo = sincronizarAqui();
+  } else {
+    trabajo = navigator.serviceWorker.ready
+      .then(function (registroSw) {
+        if (!haySyncManager) {
+          log('Sin background sync, le aviso al SW.');
+          return avisarAlSW() || sincronizarAqui();
         }
-        return via;
+
+        return registroSw.sync.register(ETIQUETA)
+          .then(function () {
+            log('Listo, el navegador lo hace solo.');
+          })
+          .catch(function () {
+            log('No se pudo, se lo pido al SW.');
+            return avisarAlSW() || sincronizarAqui();
+          });
       })
-      .catch(function (error) {
-        registrar('No se pudo sincronizar: ' + error.message);
-      })
-      .then(function () {
-        elementos.botonSincronizar.disabled = false;
+      .catch(function () {
+        return sincronizarAqui();
       });
   }
 
-  /** Respaldo para navegadores sin SyncManager: al volver la red, sincroniza. */
-  function alVolverLaConexion() {
-    actualizarEstadoRed();
-    registrar('Conexion restablecida.');
+  Promise.resolve(trabajo).then(function () {
+    btnSync.disabled = false;
+  });
+}
 
-    if (soportaBackgroundSync) {
-      registrar('SyncManager disponible: el navegador reintenta por su cuenta.');
-      return Promise.resolve();
+function purgar() {
+  btnPurgar.disabled = true;
+
+  DBHelper.eliminarPorEstado('sincronizado')
+    .then(function (total) {
+      log(total === 0 ? 'No hay nada que borrar.' : 'Borre ' + total + '.');
+      return refrescar();
+    })
+    .catch(function (error) {
+      log('No se pudo borrar: ' + error.message);
+    })
+    .then(function () {
+      btnPurgar.disabled = false;
+    });
+}
+
+function escucharSW() {
+  if (!('serviceWorker' in navigator)) {
+    return;
+  }
+
+  navigator.serviceWorker.addEventListener('message', function (evento) {
+    if (!evento.data || evento.data.tipo !== 'SYNC_FIN') {
+      return;
     }
 
-    return pedirSincronizacion();
-  }
+    log('Se sincronizo.');
+    refrescar();
+  });
+}
 
-  /** Arranque de la aplicacion. */
-  function iniciar() {
-    actualizarEstadoRed();
-    window.addEventListener('online', alVolverLaConexion);
-    window.addEventListener('offline', actualizarEstadoRed);
+function iniciar() {
+  pintarRed();
+  escucharSW();
 
-    elementos.formulario.addEventListener('submit', manejarEnvio);
-    elementos.botonPurgar.addEventListener('click', purgarSincronizados);
-    elementos.botonSincronizar.addEventListener('click', manejarSincronizar);
-    escucharServiceWorker();
+  form.addEventListener('submit', enviar);
+  btnSync.addEventListener('click', sincronizar);
+  btnPurgar.addEventListener('click', purgar);
 
-    DBHelper.abrir()
+  window.addEventListener('offline', pintarRed);
+  window.addEventListener('online', function () {
+    pintarRed();
+    log('Volvio la red.');
+
+    if (!haySyncManager) {
+      sincronizar();
+    }
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
       .then(function () {
-        registrar('IndexedDB lista (' + DBHelper.NOMBRE_BD + ' v1).');
-        return Promise.all([renderizarCola(), actualizarContador()]);
+        log('SW listo.');
       })
       .catch(function (error) {
-        registrar('No se pudo abrir IndexedDB: ' + error.message);
+        log('No se pudo activar el SW: ' + error.message);
       });
-
-    registrarServiceWorker();
+  } else {
+    log('Este navegador no trae service workers.');
   }
 
-  document.addEventListener('DOMContentLoaded', iniciar);
-})();
+  log('Todo listo.');
+  refrescar();
+}
+
+iniciar();
