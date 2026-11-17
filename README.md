@@ -26,7 +26,7 @@ guardan en **IndexedDB** como `pendiente` y se sincronizan despues desde el
 - [x] Estructura base de la interfaz.
 - [x] Mini-wrapper de IndexedDB (Tema 5.1).
 - [x] Patron Outbox y purga (Tema 5.2).
-- [ ] Manifest e iconos.
+- [x] Manifest e iconos.
 - [ ] Background Sync con `postMessage` (Tema 5.3).
 - [ ] Respaldo con el evento `online`.
 - [ ] Despliegue en GitHub Pages.
