@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0f172a">
-  <meta name="description" content="PWA con patron Outbox: envios que fallan sin red se guardan en IndexedDB y se sincronizan al volver la conexion.">
+  <meta name="theme-color" content="#f4f4f4">
+  <meta name="description" content="Practica de PWA con patron Outbox: los envios que fallan se guardan en IndexedDB y se sincronizan al volver la conexion.">
   <title>Outbox PWA | IndexedDB + Background Sync</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icons/icon-192.svg" type="image/svg+xml">
@@ -15,7 +15,7 @@
     <div class="cabecera__texto">
       <h1>Outbox PWA</h1>
       <p class="cabecera__subtitulo">
-        Envios encolados en IndexedDB y sincronizados por el Service Worker.
+        Los envios que fallan se guardan en IndexedDB y se sincronizan despues.
       </p>
     </div>
     <div class="cabecera__estado">
@@ -86,7 +86,7 @@
     </section>
 
     <section class="tarjeta tarjeta--consola" aria-labelledby="titulo-consola">
-      <h2 id="titulo-consola">Registro de actividad</h2>
+      <h2 id="titulo-consola">Registro</h2>
       <pre id="registro" class="consola">Esperando eventos...</pre>
     </section>
   </main>
