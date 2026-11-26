@@ -36,6 +36,45 @@
       </form>
     </section>
 
+    <section class="card" id="geo">
+      <div class="fila">
+        <h2>Mi ubicacion</h2>
+        <span id="geo-permiso" class="badge">Revisando permiso...</span>
+      </div>
+      <p class="nota">No se pide al abrir: primero te explicamos para que la queremos.</p>
+
+      <div class="acciones">
+        <button id="geo-btn" type="button">Ver mi ubicacion</button>
+        <button id="geo-btn-manual" type="button" class="boton-sec">Elegir zona a mano</button>
+      </div>
+
+      <!-- Pre-Permiso: esta tarjeta aparece ANTES del dialogo nativo. -->
+      <div id="geo-consent" class="aviso" hidden>
+        <strong>Nos prestas tu ubicacion?</strong>
+        <p>Se usa solo para mostrarla aqui abajo. No se guarda ni se manda a ningun servidor. Si dices que no, puedes elegir una zona a mano.</p>
+        <div class="acciones">
+          <button id="geo-permitir" type="button">Permitir ubicacion</button>
+          <button id="geo-cancelar" type="button" class="boton-sec">Ahora no</button>
+        </div>
+      </div>
+
+      <!-- Plan B: zona manual si se niega el permiso o hay TIMEOUT. -->
+      <div id="geo-manual" class="aviso" hidden>
+        <label for="geo-zona">Zona (sin GPS):</label>
+        <select id="geo-zona"></select>
+        <div class="acciones">
+          <button id="geo-usar-zona" type="button">Usar esta zona</button>
+        </div>
+      </div>
+
+      <div id="geo-resultado" class="resultado" hidden></div>
+      <p id="geo-nota" class="nota" hidden></p>
+
+      <div class="acciones">
+        <button id="geo-reintentar" type="button" class="boton-sec" hidden>Reintentar sin GPS</button>
+      </div>
+    </section>
+
     <section class="card">
       <div class="fila">
         <h2>La cola</h2>
@@ -53,10 +92,14 @@
     </section>
   </main>
 
-  <footer>Practica 5.1 - 5.3</footer>
+  <footer>Practica 5.1 - 5.3 y ubicacion</footer>
 
   <!-- db-helper.js primero: define DBHelper. app.js despues porque lo usa. -->
   <script src="./db-helper.js"></script>
   <script src="./app.js"></script>
+  <!-- geo-helper.js define GeoHelper y geo-ui.js lo usa. Van al final
+       para poder escribir en el log de app.js. -->
+  <script src="./geo-helper.js"></script>
+  <script src="./geo-ui.js"></script>
 </body>
 </html>

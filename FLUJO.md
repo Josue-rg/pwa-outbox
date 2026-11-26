@@ -80,6 +80,8 @@ Regla de oro para no perderte:
 - **`manifest.json`** + **`icons/`** → identidad de la PWA. No participan
   en el flujo.
 - **`styles.css`** → solo se ve bonito. No participa.
+- **`geo-helper.js`** → la ubicacion, empaquetada en promesas.
+- **`geo-ui.js`** → la tarjeta de pre-permiso, el resultado y el plan B.
 
 ---
 
@@ -222,7 +224,7 @@ Esto es lo que hace que la app **abra aunque no haya red**.
 
 | Codigo | Evento | Que hace |
 | --- | --- | --- |
-| **C1** | `install` | Guarda el shell (`index.html`, CSS, JS, iconos) en el cache `outbox-v5`. |
+| **C1** | `install` | Guarda el shell (`index.html`, CSS, JS, iconos) en el cache `outbox-v6`. |
 | **C2** | `activate` | Borra los caches viejos y toma el control de las paginas abiertas. |
 | **C3** | `fetch` | Si es `GET`, responde **del cache primero**; si no esta, va a la red. |
 
@@ -324,8 +326,65 @@ Nada se pierde: la cola esta en IndexedDB, no en memoria. Al abrir,
 - **Application → Service Workers** → estado del SW y su evento `sync`.
 - **Application → IndexedDB → `outbox-db` → `outbox`** → aqui se ve la cola
   con `estado` y `ultimoError`. Es la prueba mas fuerte.
-- **Application → Cache Storage → `outbox-v5`** → los archivos del shell.
+- **Application → Cache Storage → `outbox-v6`** → los archivos del shell.
 - **Application → Background Services → Background Sync** → la etiqueta
   `outbox-sync`.
 - **Network → Offline** → la forma mas rapida de provocar todo el flujo.
 - **Panel "Lo que pasa"** → el log cuenta los pasos en orden.
+
+---
+
+## 12. Practica de ubicacion (geo-helper.js + geo-ui.js)
+
+### El flujo en 5 pasos
+
+```
+(1) abrir la app
+      │  geo-ui.js pregunta el permiso con permissions.query
+      │  (esto NO abre el dialogo del navegador)
+      ▼
+(2) clic "Ver mi ubicacion"
+      │  aparece la tarjeta de Pre-Permiso
+      ▼
+(3) clic "Permitir ubicacion"   <-- gesto real del usuario
+      │  GeoHelper.obtenerUbicacion() -> new Promise(...)
+      │  navigator.geolocation.getCurrentPosition(...)
+      ▼
+(4) respuesta
+      │  coords.latitude / coords.longitude / coords.accuracy
+      ▼
+(5) pintarResultado()
+         accuracy <= 50 m  -> GPS alta precision
+         accuracy <= 500 m -> Wi-Fi / antenas
+         accuracy > 500 m  -> IP (muy aproximada)
+```
+
+### Los errores y el Plan B
+
+| Codigo | Que significa | Que hace la app |
+| --- | --- | --- |
+| `PERMISO` | El usuario dijo que no o el navegador bloqueo el sitio. | Muestra el selector de zona y explica como revisar el candado. |
+| `TIMEOUT` | El navegador se tardo (tipico en laptop sin GPS). | Muestra zona manual y el boton "Reintentar sin GPS". |
+| `SIN_SENAL` | No pudo calcular la posicion. | Muestra zona manual. |
+| `SIN_SOPORTE` | El navegador no trae geolocalizacion. | Deja solo la zona manual. |
+
+> **Para decir en la defensa:** "Nunca llamamos a `getCurrentPosition` al
+> cargar. Primero mostramos una tarjeta que explica el uso; el dialogo nativo
+> solo sale cuando el usuario pulsa Permitir. Eso cumple el Pre-Permiso y en
+> iOS es obligatorio, porque Safari exige un clic directo."
+
+### Lo que hay que recordar por plataforma
+
+- **iPhone / Safari:** el permiso tiene que venir de un clic. Ademas, Safari y
+  la PWA instalada en pantalla de inicio guardan permisos **por separado**.
+- **Laptop sin GPS:** no hay chip satelital; el navegador usa Wi-Fi o IP, el
+  margen sube y `enableHighAccuracy: true` puede terminar en `TIMEOUT`.
+- **HTTPS:** la geolocalizacion solo funciona en contexto seguro
+  (`https://` o `localhost`). GitHub Pages ya es HTTPS.
+
+### Donde verlo en DevTools
+
+- **Sensors / Location** → simular coordenadas y ver cambiar el margen.
+- **Application / Permissions** → conceder o bloquear la ubicacion.
+- **Consola** → los errores nativos traen `code` 1, 2 o 3; `geo-helper.js`
+  los convierte en `PERMISO`, `SIN_SENAL` y `TIMEOUT`.

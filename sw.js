@@ -7,7 +7,7 @@
 // Carga la misma capa de IndexedDB que usa la pagina (pasos 6, 11, 13).
 importScripts('./db-helper.js');
 
-var CACHE = 'outbox-v5';
+var CACHE = 'outbox-v6';
 var ETIQUETA = 'outbox-sync';
 var API = 'https://jsonplaceholder.typicode.com/posts';
 
@@ -17,6 +17,8 @@ var ARCHIVOS = [
   './styles.css',
   './db-helper.js',
   './app.js',
+  './geo-helper.js',
+  './geo-ui.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'

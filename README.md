@@ -24,6 +24,8 @@ Demo: <https://josue-rg.github.io/pwa-outbox/>
 | `styles.css` | Estilos. |
 | `db-helper.js` | Funciones de IndexedDB (sirve en la pagina y en el SW). |
 | `app.js` | Envio, encolado, render y purga. |
+| `geo-helper.js` | Geolocalizacion en promesas: permiso, coordenadas y precision. |
+| `geo-ui.js` | Tarjeta de pre-permiso, resultado y plan B manual. |
 | `sw.js` | Cache y sincronizacion en segundo plano. |
 | `manifest.json`, `icons/` | Datos e iconos de la PWA. |
 
@@ -41,3 +43,21 @@ Abrir <http://localhost:8080>.
    recargar.
 3. Poner la red en offline, enviar otro mensaje y volver a conectar.
 4. "Borrar enviados" borra los que ya se enviaron.
+
+## Ubicacion (practica de geolocalizacion)
+
+- `geo-helper.js` encapsula todo: `GeoHelper.soportado()`,
+  `GeoHelper.consultarPermiso()` y `GeoHelper.obtenerUbicacion()` (esta
+  ultima envuelve `navigator.geolocation.getCurrentPosition()` en una
+  `Promise`). Tambien clasifica el margen `coords.accuracy` en GPS de alta
+  precision (<= 50 m), aproximada por Wi-Fi (<= 500 m) o por IP.
+- `geo-ui.js` implementa el **Pre-Permiso UX**: primero aparece una tarjeta
+  explicativa y solo al pulsar "Permitir ubicacion" se abre el dialogo
+  nativo. Asi tambien funciona en iPhone, donde Safari exige un clic.
+- **Plan B:** si se niega el permiso, no hay soporte o hay `TIMEOUT`, se
+  muestra un selector de zona manual. En laptops sin GPS, el boton
+  "Reintentar sin GPS" repite la peticion con `enableHighAccuracy: false`.
+- Todo sigue sin librerias y sin `async / await`.
+- Para probar: `localhost` o GitHub Pages (la geolocalizacion necesita un
+  contexto seguro). En DevTools se puede simular la posicion en
+  **Sensors / Location** y el permiso en **Application / Permissions**.

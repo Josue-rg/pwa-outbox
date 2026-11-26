@@ -105,6 +105,109 @@ textarea:focus {
   outline-offset: 1px;
 }
 
+select {
+  width: 100%;
+  max-width: 280px;
+  padding: 7px 9px;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+select:focus {
+  outline: 2px solid #9cc4ee;
+  outline-offset: 1px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.aviso {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-left: 3px solid #34699c;
+  border-radius: 3px;
+  background: #f7f9fc;
+}
+
+.aviso p {
+  margin: 6px 0 0;
+  color: #555;
+  font-size: 13px;
+}
+
+.aviso .acciones {
+  margin-top: 10px;
+}
+
+.aviso label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.aviso .acciones button {
+  margin-top: 8px;
+}
+
+.resultado {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-left: 3px solid #34699c;
+  border-radius: 3px;
+  background: #fafafa;
+}
+
+.resultado p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.geo-coords {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px !important;
+}
+
+.geo-margen {
+  color: #444;
+}
+
+.geo-mapa {
+  display: inline-block;
+  margin-top: 8px;
+  color: #2d5f8f;
+  font-size: 13px;
+}
+
+.badge.geo-alta {
+  border-color: #7cb87c;
+  background: #eef7ee;
+  color: #2f6b2f;
+}
+
+.badge.geo-media {
+  border-color: #c9b479;
+  background: #fdf8e9;
+  color: #6b5620;
+}
+
+.badge.geo-baja {
+  border-color: #c98a8a;
+  background: #fbeeee;
+  color: #8a2b2b;
+}
+
+.badge.geo-manual {
+  border-color: #9aa7b8;
+  background: #eef1f6;
+  color: #3f4c5e;
+}
+
 .acciones {
   display: flex;
   flex-wrap: wrap;
