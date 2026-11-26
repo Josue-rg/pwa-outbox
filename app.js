@@ -1,3 +1,11 @@
+// ============================================================
+// app.js - FLUJO PRINCIPAL (pasos 1 a 9 y 15)
+// Lado de la pagina: escucha el formulario, intenta enviar, si
+// falla guarda en la cola, vigila la red y pinta lo guardado.
+// Los pasos 10 a 14 estan en sw.js y el acceso a datos (6, 7, 11, 13,
+// y el borrado P1) en db-helper.js.
+// ============================================================
+
 var API = 'https://jsonplaceholder.typicode.com/posts';
 var ETIQUETA = 'outbox-sync';
 var haySyncManager = 'serviceWorker' in navigator && 'SyncManager' in window;
@@ -75,6 +83,8 @@ function checarRed() {
   });
 }
 
+// 8. Aqui se decide que hacer cuando cambia la red: si volvio, se
+//    dispara la sincronizacion automatica (paso 9).
 function actualizarRed(conRed) {
   if (conRed === enLinea) {
     return;
@@ -94,11 +104,15 @@ function actualizarRed(conRed) {
   }
 }
 
+// Revisa la red cada 2 segundos con un fetch real (no window.online).
+// Cuando el resultado cambia, cae en el paso 8.
 function vigilarRed() {
   checarRed();
   setInterval(checarRed, CHEQUEO_MS);
 }
 
+// 3. Intento de envio real: POST a la API. Si el servidor no responde
+//    ok, lanza el error que activa el paso 4. Lo reusa sincronizarAqui().
 function enviarAlServidor(datos) {
   return fetch(API, {
     method: 'POST',
@@ -112,6 +126,8 @@ function enviarAlServidor(datos) {
   });
 }
 
+// 5. El envio fallo: arma el registro con estado 'pendiente' y lo manda
+//    a DBHelper.guardar() (paso 6) para que quede en IndexedDB.
 function guardarPendiente(datos, motivo) {
   return DBHelper.guardar({
     titulo: datos.titulo,
@@ -161,6 +177,8 @@ function crearItem(r) {
   return item;
 }
 
+// 7. Lee todo lo guardado con DBHelper.listarTodos() (db-helper.js)
+//    y dibuja la cola, lo mas nuevo primero.
 function pintarCola() {
   return DBHelper.listarTodos().then(function (registros) {
     registros.sort(function (a, b) {
@@ -183,6 +201,8 @@ function pintarCola() {
   });
 }
 
+// 7b. Cuenta los 'pendiente' con DBHelper.contarPorEstado() y lo pinta
+//     en el badge "N en cola".
 function pintarContador() {
   return DBHelper.contarPorEstado('pendiente').then(function (total) {
     contador.textContent = total + ' en cola';
@@ -195,6 +215,8 @@ function refrescar() {
   });
 }
 
+// 1 y 2. Punto de entrada: el submit del formulario (paso 1, index.html)
+//    llega aqui. Valida los campos y arranca el envio.
 function enviar(evento) {
   evento.preventDefault();
 
@@ -209,10 +231,12 @@ function enviar(evento) {
   btnEnviar.disabled = true;
   log('Mandando "' + t + '"...');
 
+  // 3. Primer intento directo contra la API, sin pasar por el SW.
   enviarAlServidor({ titulo: t, mensaje: m })
     .then(function (respuesta) {
       log('Enviado, id ' + (respuesta.id || 'n/d'));
     })
+    // 4. Fallo el POST: el mensaje no se pierde, se manda a la cola.
     .catch(function (error) {
       log('No salio (' + error.message + '). Va a la cola.');
       return guardarPendiente({ titulo: t, mensaje: m }, error.message);
@@ -228,6 +252,8 @@ function enviar(evento) {
     });
 }
 
+// Plan B (sin Service Worker o sin Background Sync): la pagina hace el
+// mismo trabajo que el SW (pasos 11, 12 y 13) pero en primer plano.
 function sincronizarAqui() {
   log('Sincronizando aqui...');
 
@@ -258,6 +284,8 @@ function sincronizarAqui() {
     });
 }
 
+// 9b. Camino alterno al Background Sync: la pagina le pide al SW que
+//     sincronice ya por mensaje (el SW lo recibe en el paso 10b).
 function avisarAlSW() {
   if (!navigator.serviceWorker.controller) {
     return false;
@@ -267,6 +295,10 @@ function avisarAlSW() {
   return true;
 }
 
+// 9. Aqui se decide quien sincroniza:
+//    a) el navegador con Background Sync (sync.register), o
+//    b) el SW por mensaje (paso 9b), o
+//    c) la pagina misma (sincronizarAqui, plan B).
 function sincronizar() {
   log('Sincronizando automaticamente...');
 
@@ -299,6 +331,8 @@ function sincronizar() {
   return Promise.resolve(trabajo);
 }
 
+// P1. Borra de IndexedDB los 'sincronizado' con DBHelper.eliminarPorEstado()
+//     y repinta la cola.
 function purgar() {
   btnPurgar.disabled = true;
 
@@ -315,6 +349,8 @@ function purgar() {
     });
 }
 
+// 15. Escucha el aviso 'SYNC_FIN' que manda el SW al terminar (paso 14).
+//     Al recibirlo repinta para que se vea el cambio de estado.
 function escucharSW() {
   if (!('serviceWorker' in navigator)) {
     return;
@@ -330,6 +366,7 @@ function escucharSW() {
   });
 }
 
+// Arranque: pinta la red, engancha botones, registra el SW y vigila.
 function iniciar() {
   pintarRed();
   escucharSW();
@@ -341,6 +378,7 @@ function iniciar() {
   window.addEventListener('online', checarRed);
 
   if ('serviceWorker' in navigator) {
+    // Registro del SW: a partir de aqui sw.js toma el control (C1, C2, C3).
     navigator.serviceWorker.register('./sw.js')
       .then(function () {
         log('SW listo.');
