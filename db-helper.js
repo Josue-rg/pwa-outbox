@@ -1,60 +1,7 @@
-// ============================================================
-// db-helper.js - PASOS 6, 7, 11, 13 y P1
-// Unica puerta a IndexedDB. La usan app.js (pagina) y sw.js (fondo),
-// por eso al final se expone en self.
-// ============================================================
-
 var DBHelper = (function () {
   var NOMBRE = 'outbox-db';
   var ALMACEN = 'outbox';
   var conexion = null;
-
-  // Abre outbox-db. Si no existe la crea, con indices por estado y fecha.
-  function abrir() {
-    if (conexion) {
-      return Promise.resolve(conexion);
-    }
-
-    return new Promise(function (resolver, rechazar) {
-      var peticion = indexedDB.open(NOMBRE, 1);
-
-      peticion.onupgradeneeded = function (evento) {
-        var almacen = evento.target.result.createObjectStore(ALMACEN, {
-          keyPath: 'id',
-          autoIncrement: true
-        });
-
-        almacen.createIndex('por_estado', 'estado');
-        almacen.createIndex('por_fecha', 'creadoEn');
-      };
-
-      peticion.onsuccess = function (evento) {
-        conexion = evento.target.result;
-        resolver(conexion);
-      };
-
-      peticion.onerror = function () {
-        rechazar(peticion.error);
-      };
-    });
-  }
-
-  function ejecutar(modo, operacion) {
-    return abrir().then(function (db) {
-      return new Promise(function (resolver, rechazar) {
-        var tx = db.transaction(ALMACEN, modo);
-        var peticion = operacion(tx.objectStore(ALMACEN));
-
-        tx.oncomplete = function () {
-          resolver(peticion.result);
-        };
-
-        tx.onerror = function () {
-          rechazar(tx.error);
-        };
-      });
-    });
-  }
 
   // 6. INSERT: guarda un registro nuevo y devuelve el id autoincremental.
   function guardar(registro) {
@@ -63,7 +10,7 @@ var DBHelper = (function () {
     });
   }
 
-  // 7. SELECT *: todo lo guardado, para pintar la cola completa.
+  // (7.1) SELECT *: todo lo guardado, para pintar la cola completa.
   function listarTodos() {
     return ejecutar('readonly', function (almacen) {
       return almacen.getAll();
@@ -77,7 +24,7 @@ var DBHelper = (function () {
     });
   }
 
-  // 7b. COUNT por estado: alimenta el badge "N en cola".
+  // 7b. COUNT por estado: alimenta el badge.
   function contarPorEstado(estado) {
     return ejecutar('readonly', function (almacen) {
       return almacen.index('por_estado').count(estado);
@@ -131,6 +78,52 @@ var DBHelper = (function () {
     });
   }
 
+  function abrir() {
+    if (conexion) {
+      return Promise.resolve(conexion);
+    }
+
+    return new Promise(function (resolver, rechazar) {
+      var peticion = indexedDB.open(NOMBRE, 1);
+
+      peticion.onupgradeneeded = function (evento) {
+        var almacen = evento.target.result.createObjectStore(ALMACEN, {
+          keyPath: 'id',
+          autoIncrement: true
+        });
+
+        almacen.createIndex('por_estado', 'estado');
+        almacen.createIndex('por_fecha', 'creadoEn');
+      };
+
+      peticion.onsuccess = function (evento) {
+        conexion = evento.target.result;
+        resolver(conexion);
+      };
+
+      peticion.onerror = function () {
+        rechazar(peticion.error);
+      };
+    });
+  }
+
+  function ejecutar(modo, operacion) {
+    return abrir().then(function (db) {
+      return new Promise(function (resolver, rechazar) {
+        var tx = db.transaction(ALMACEN, modo);
+        var peticion = operacion(tx.objectStore(ALMACEN));
+
+        tx.oncomplete = function () {
+          resolver(peticion.result);
+        };
+
+        tx.onerror = function () {
+          rechazar(tx.error);
+        };
+      });
+    });
+  }
+
   return {
     abrir: abrir,
     guardar: guardar,
@@ -142,5 +135,4 @@ var DBHelper = (function () {
   };
 })();
 
-// self es el ambito global: asi sw.js lo encuentra tras importScripts.
 self.DBHelper = DBHelper;
